@@ -137,15 +137,22 @@ jobs:
         with:
           cache-read-only: true
 
-      - name: Run instrumented tests on emulator (API 34)
+      - name: Run instrumented tests on emulator (API 34), offline
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           target: google_apis
           arch: x86_64
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
-          script: ./gradlew --no-daemon connectedDebugAndroidTest 2>&1 | tee instrumented-log.txt
+          emulator-options: -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back none -no-snapshot
+          # Airplane mode on the emulator only (Gradle on the runner still has internet). Every test in this run
+          # therefore proves the offline studio works without a connection; OfflineEvidenceTest asserts it.
+          script: |
+            ./gradlew --no-daemon installDebug installDebugAndroidTest
+            adb shell cmd connectivity airplane-mode enable; adb shell svc wifi disable; adb shell svc data disable; sleep 5
+            ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.expectOffline=true > instrumented-log.txt 2>&1 || (tail -150 instrumented-log.txt; adb logcat -d > logcat.txt; exit 1)
+            tail -40 instrumented-log.txt
+            adb logcat -d -s SwarAIOffline > offline-evidence.txt || true
 
       - name: Upload instrumented test reports
         if: always()
@@ -156,5 +163,7 @@ jobs:
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
             instrumented-log.txt
+            logcat.txt
+            offline-evidence.txt
           if-no-files-found: ignore
           retention-days: 14
