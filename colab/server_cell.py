@@ -186,10 +186,14 @@ for _ in range(90):
 if not PUBLIC_URL:
     print(tail(tunnel_log))
     raise SystemExit("❌ Could not open a Cloudflare tunnel. Run the cell again.")
-for _ in range(45):  # new tunnel names take a few seconds to resolve
-    if http_ok(f"{PUBLIC_URL}/health", API_KEY):
+ok_in_a_row = 0
+for _ in range(60):  # a new tunnel takes a little while before every request gets through reliably
+    ok_in_a_row = ok_in_a_row + 1 if http_ok(f"{PUBLIC_URL}/health", API_KEY) else 0
+    if ok_in_a_row >= 3:
         break
-    time.sleep(4)
+    time.sleep(3)
+if ok_in_a_row < 3:
+    print("⚠️ The public address is answering unreliably; the app retries automatically, but if songs fail, run the cell again.")
 (WORK / "swarai_public_url.txt").write_text(PUBLIC_URL)
 
 print("\n" + "=" * 60)

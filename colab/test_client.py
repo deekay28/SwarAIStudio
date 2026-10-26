@@ -4,6 +4,7 @@ import json
 import pathlib
 import sys
 import time
+import urllib.error
 import urllib.request
 
 url, key, out_dir = sys.argv[1].rstrip("/"), sys.argv[2], pathlib.Path(sys.argv[3])
@@ -11,12 +12,24 @@ duration = int(sys.argv[4]) if len(sys.argv) > 4 else 30
 headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
 
 
-def call(path, body=None, raw=False):
-    req = urllib.request.Request(url + path, data=None if body is None else json.dumps(body).encode(),
-                                 headers=headers, method="GET" if body is None else "POST")
-    with urllib.request.urlopen(req, timeout=120) as r:
-        data = r.read()
-    return data if raw else json.loads(data)
+def call(path, body=None, raw=False, retries=0):
+    """Like the app: optionally retry tunnel hiccups (HTTP 5xx / connection errors)."""
+    for attempt in range(retries + 1):
+        req = urllib.request.Request(url + path, data=None if body is None else json.dumps(body).encode(),
+                                     headers=headers, method="GET" if body is None else "POST")
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                data = r.read()
+            return data if raw else json.loads(data)
+        except urllib.error.HTTPError as exc:
+            if exc.code < 500 or attempt == retries:
+                raise
+            print(f"  transient HTTP {exc.code} on {path}, retrying…", flush=True)
+        except urllib.error.URLError as exc:
+            if attempt == retries:
+                raise
+            print(f"  connection error on {path} ({exc.reason}), retrying…", flush=True)
+        time.sleep(3 * (attempt + 1))
 
 
 health = call("/health")
@@ -37,7 +50,7 @@ print("release_task:", task)
 task_id = task["data"]["task_id"]
 start = time.time()
 while True:
-    q = call("/query_result", {"task_id_list": [task_id]})
+    q = call("/query_result", {"task_id_list": [task_id]}, retries=10)
     item = next(i for i in q["data"] if i["task_id"] == task_id)
     if item["status"] in (1, 2):
         break
@@ -50,7 +63,7 @@ if item["status"] != 1:
     sys.exit("generation failed")
 results = json.loads(item["result"]) if isinstance(item["result"], str) else item["result"]
 results = results if isinstance(results, list) else [results]
-audio = call(results[0]["file"] if results[0]["file"].startswith("/") else "/" + results[0]["file"], raw=True)
+audio = call(results[0]["file"] if results[0]["file"].startswith("/") else "/" + results[0]["file"], raw=True, retries=3)
 out_dir.mkdir(parents=True, exist_ok=True)
 path = out_dir / "acestep-test.mp3"
 path.write_bytes(audio)

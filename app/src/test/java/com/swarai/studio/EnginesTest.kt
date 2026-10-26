@@ -176,6 +176,36 @@ class EnginesTest {
         assertEquals("false", thinkingSent)
     }
 
+    @Test fun aceStepRetriesTunnelHiccupsWhilePolling() = runBlocking {
+        var queries = 0
+        dispatch { r ->
+            when (r.path) {
+                "/release_task" -> json("""{"data":{"task_id":"t3"},"code":200}""")
+                "/query_result" -> {
+                    queries++
+                    if (queries <= 2) MockResponse().setResponseCode(530) // Cloudflare: origin briefly unreachable
+                    else json("""{"data":[{"task_id":"t3","status":1,"result":${JsonPrimitive("""[{"file":"/v1/audio?path=x.mp3"}]""")}}],"code":200}""")
+                }
+                else -> if (r.path!!.startsWith("/v1/audio")) MockResponse().setBody(Buffer().write(fakeMp3)) else MockResponse().setResponseCode(404)
+            }
+        }
+        val engine = AceStepCompanionEngine(server.url("/").toString(), "", http, pollIntervalMs = 1)
+        assertEquals(1, engine.generate(spec.copy(variations = 1), outDir, null, callbacks).size)
+        assertEquals(3, queries)
+    }
+
+    @Test fun aceStepGivesUpAfterRepeatedFailures() {
+        dispatch { r ->
+            when (r.path) {
+                "/release_task" -> json("""{"data":{"task_id":"t4"},"code":200}""")
+                else -> MockResponse().setResponseCode(530)
+            }
+        }
+        val engine = AceStepCompanionEngine(server.url("/").toString(), "", http, pollIntervalMs = 1)
+        val error = assertThrows(EngineException::class.java) { runBlocking { engine.generate(spec, outDir, null, callbacks) } }
+        assertTrue(error.message!!.contains("530"))
+    }
+
     @Test fun aceStepResultParsingVariants() {
         assertEquals(1, AceStepCompanionEngine.parseResults(JsonPrimitive("""{"file":"/a"}""")).size)
         assertEquals(0, AceStepCompanionEngine.parseResults(JsonPrimitive("garbage")).size)

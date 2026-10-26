@@ -23,6 +23,9 @@ from .base import (
 )
 
 
+MAX_TRANSIENT_FAILURES = 10
+
+
 class SelfHostedAceStep(Provider):
     def __init__(self, base_url: str, api_key: str = "", poll_interval: float = 2.0):
         self._base = base_url.rstrip("/") + "/"
@@ -86,10 +89,24 @@ class SelfHostedAceStep(Provider):
         task_id = (release.json().get("data") or {}).get("task_id")
         if not task_id:
             raise ProviderError("ACE-Step server did not return a task id.")
+        transient = 0
         while True:
-            query = await client.post(
-                urljoin(self._base, "query_result"), json={"task_id_list": [task_id]}, headers=self._headers
-            )
+            try:
+                query = await client.post(
+                    urljoin(self._base, "query_result"), json={"task_id_list": [task_id]}, headers=self._headers
+                )
+            except httpx.TransportError:
+                query = None
+            # Tunnels drop the odd request (e.g. Cloudflare 530); only give up after repeated failures.
+            if query is None or query.status_code >= 500:
+                transient += 1
+                if transient > MAX_TRANSIENT_FAILURES:
+                    if query is None:
+                        raise ProviderError("Lost connection to the ACE-Step server.", retryable=True)
+                    raise_for_provider_status(query, "ACE-Step server")
+                await asyncio.sleep(self._poll_interval * min(transient, 5))
+                continue
+            transient = 0
             raise_for_provider_status(query, "ACE-Step server")
             items = query.json().get("data") or []
             item = next((i for i in items if i.get("task_id") == task_id), None)
