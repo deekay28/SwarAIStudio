@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext is permitted at the platform level only so the app can reach an ACE-Step server on the
+  user's own local network (Android cannot whitelist IP ranges here). The app's single HTTP client
+  enforces HTTPS for every non-private address in NetworkPolicy, and the player only opens local files.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

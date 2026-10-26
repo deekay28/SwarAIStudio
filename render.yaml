@@ -1,0 +1,17 @@
+# One-click deploy of the SwarAI backend on Render (https://render.com) from your phone's browser:
+# Render dashboard → New → Blueprint → pick this repository. Secrets are entered in Render, never committed.
+services:
+  - type: web
+    name: swarai-backend
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: SWARAI_APP_TOKENS
+        generateValue: true        # Render creates a random token; copy it into the app's Settings
+      - key: DEEPINFRA_API_KEY
+        sync: false                # you paste your key in the Render dashboard
+      - key: SWARAI_MAX_DAILY_AUDIO_SECONDS
+        value: "1800"              # cost guard: ~30 minutes of audio per day (~$1.80 on DeepInfra)

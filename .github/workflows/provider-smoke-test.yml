@@ -1,0 +1,77 @@
+name: Provider smoke test (real generation)
+
+# Manual only. Starts the SwarAI backend on the GitHub runner, generates ONE real song through the chosen
+# provider, and uploads the audio as an artifact. This makes a PAID request for hosted providers.
+# Required secret for DeepInfra: DEEPINFRA_API_KEY.  For fal.ai: FAL_KEY.
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: "Provider to test"
+        type: choice
+        options: [deepinfra-acestep15, fal-acestep, diagnostic-tone]
+        default: deepinfra-acestep15
+      duration_seconds:
+        description: "Song length in seconds (DeepInfra minimum is 30; cost ≈ $0.001/s)"
+        default: "30"
+      confirm_cost:
+        description: 'Type "I accept the cost" to allow a paid request'
+        default: ""
+
+permissions:
+  contents: read
+
+# Explicit bash => "-eo pipefail", so "cmd | tee log" fails when cmd fails.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Cost confirmation
+        if: inputs.provider != 'diagnostic-tone' && inputs.confirm_cost != 'I accept the cost'
+        run: |
+          echo "::error::Paid provider selected. Re-run and type exactly: I accept the cost"
+          exit 1
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements.txt
+      - name: Start backend with server-side secrets
+        working-directory: backend
+        env:
+          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+          FAL_KEY: ${{ secrets.FAL_KEY }}
+          SWARAI_ENABLE_DIAGNOSTIC: "1"
+          SWARAI_MAX_DAILY_AUDIO_SECONDS: "300"
+        run: |
+          export SWARAI_APP_TOKENS="$(openssl rand -hex 16)"
+          echo "SWARAI_TOKEN=$SWARAI_APP_TOKENS" >> "$GITHUB_ENV"
+          echo "::add-mask::$SWARAI_APP_TOKENS"
+          nohup uvicorn swarai_backend.main:app --port 8080 > ../backend-log.txt 2>&1 &
+          for i in $(seq 1 20); do curl -fsS localhost:8080/health && exit 0; sleep 1; done
+          cat ../backend-log.txt; exit 1
+      - name: Generate one song
+        env:
+          SWARAI_URL: http://localhost:8080
+          SMOKE_DURATION: ${{ inputs.duration_seconds }}
+          SMOKE_FORMAT: ${{ inputs.provider == 'deepinfra-acestep15' && 'mp3' || 'wav' }}
+        run: python backend/scripts/smoke_test.py "${{ inputs.provider }}" smoke-output 2>&1 | tee smoke-log.txt
+      - name: Inspect audio
+        if: always()
+        run: |
+          sudo apt-get install -y -qq ffmpeg > /dev/null
+          for f in smoke-output/*; do echo "== $f"; ffprobe -hide_banner "$f" 2>&1 | tail -5; done | tee -a smoke-log.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-test-${{ inputs.provider }}
+          path: |
+            smoke-output/
+            smoke-log.txt
+            backend-log.txt

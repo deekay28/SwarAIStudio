@@ -1,0 +1,46 @@
+name: Backend CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, "claude/**"]
+    paths: ["backend/**", ".github/workflows/backend-ci.yml"]
+  pull_request:
+    paths: ["backend/**"]
+
+permissions:
+  contents: read
+
+# Explicit bash => "-eo pipefail", so "cmd | tee log" fails when cmd fails.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -v 2>&1 | tee pytest-log.txt
+      - name: Docker image builds
+        run: docker build -t swarai-backend:ci .
+      - name: Container serves /health
+        run: |
+          docker run -d --name swarai -p 8080:8080 -e SWARAI_APP_TOKENS=ci swarai-backend:ci
+          for i in $(seq 1 20); do curl -fsS localhost:8080/health && exit 0; sleep 1; done
+          docker logs swarai; exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-test-log
+          path: backend/pytest-log.txt

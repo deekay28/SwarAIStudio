@@ -1,0 +1,81 @@
+name: Colab notebook check (CPU)
+
+# Runs the exact code cell of colab/SwarAI_ACE-Step_Colab.ipynb on a GitHub runner (CPU only, no GPU),
+# opens the real Cloudflare tunnel, and generates one short song through it with the same request the app sends.
+# Free; slow (CPU). Proves install + server + tunnel + app protocol work end to end.
+
+on:
+  workflow_dispatch:
+    inputs:
+      lm_model:
+        description: "LM model to load (none = fastest)"
+        type: choice
+        options: [acestep-5Hz-lm-0.6B, none]
+        default: acestep-5Hz-lm-0.6B
+  push:
+    branches: [main, "claude/**"]
+    paths: ["colab/**", ".github/workflows/colab-notebook-check.yml"]
+
+permissions:
+  contents: read
+
+# Explicit bash => "-eo pipefail", so "cmd | tee log" fails when cmd fails.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  cpu-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free disk space (model + PyTorch need ~20 GB)
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Notebook is up to date with server_cell.py
+        run: |
+          python colab/build_notebook.py
+          git diff --exit-code colab/SwarAI_ACE-Step_Colab.ipynb
+      - name: Run the notebook's code cell (CPU test mode)
+        env:
+          SWARAI_CPU_TEST: "1"
+          SWARAI_WORKDIR: ${{ runner.temp }}/colab
+          SWARAI_LM_MODEL: ${{ inputs.lm_model || 'acestep-5Hz-lm-0.6B' }}
+        run: |
+          mkdir -p "$SWARAI_WORKDIR"
+          python - <<'PY'
+          import json
+          nb = json.load(open("colab/SwarAI_ACE-Step_Colab.ipynb"))
+          code = "".join(c["source"] if isinstance(c["source"], str) else "".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "code")
+          exec(compile(code, "notebook-cell", "exec"))
+          PY
+      - name: Generate a song through the public tunnel (same request as the app)
+        env:
+          W: ${{ runner.temp }}/colab
+        run: python colab/test_client.py "$(cat $W/swarai_public_url.txt)" "$(cat $W/swarai_password.txt)" out 10 2>&1 | tee client-log.txt
+      - name: Show server log on failure
+        if: failure()
+        run: tail -120 ${{ runner.temp }}/colab/acestep-server.log || true
+      - name: Inspect audio
+        if: always()
+        run: |
+          sudo apt-get install -y -qq ffmpeg > /dev/null
+          ls -la out || true
+          for f in out/*; do ffprobe -hide_banner "$f" 2>&1 | tail -4; done | tee -a client-log.txt
+      - name: Collect logs
+        if: always()
+        run: cp ${{ runner.temp }}/colab/*.log . 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: colab-cpu-check
+          path: |
+            out/
+            client-log.txt
+            acestep-server.log
+            cloudflared.log
