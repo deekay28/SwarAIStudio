@@ -163,3 +163,19 @@ class EnginesTest {
         assertEquals(0, AceStepCompanionEngine.parseResults(null).size)
     }
 }
+
+class CompanionLabellingTest {
+    @Test fun colabTunnelIsLabelledOnline() = runBlocking {
+        val info = AceStepCompanionEngine("https://blue-sky-123.trycloudflare.com", "pw").describe()
+        assertEquals(com.swarai.studio.engine.EngineKind.CLOUD_NOTEBOOK, info.kind)
+        assertTrue(!info.worksWithoutInternet)
+        assertTrue(info.sendsDataTo.contains("Colab"))
+        assertTrue(info.pricing.isFree)
+    }
+
+    @Test fun lanServerIsLabelledLocal() = runBlocking {
+        val info = AceStepCompanionEngine("http://192.168.1.20:8001", "").describe()
+        assertEquals(com.swarai.studio.engine.EngineKind.COMPANION, info.kind)
+        assertTrue(info.worksWithoutInternet)
+    }
+}

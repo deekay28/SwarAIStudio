@@ -36,6 +36,7 @@ backend/ (Python 3.12, FastAPI): optional, deploy anywhere
 | A. Online (DeepInfra direct or SwarAI server) | Yes | Provider (and your server) | Implemented |
 | B1. On-device generation | No | Nowhere | **Not feasible**: see OFFLINE_REPORT.md |
 | B2. Computer companion (ACE-Step 1.5 on your PC) | No (LAN only) | Your PC | Implemented |
+| A2. Free cloud notebook (ACE-Step 1.5 on Colab via Cloudflare tunnel) | Yes | Your Colab VM | Implemented; labelled online |
 | C. Offline studio (edit, play, organise, export, video) | No | Nowhere | Implemented and tested offline |
 
 The app labels every engine with its mode and destination and never calls a remote engine "offline".

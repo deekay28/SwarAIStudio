@@ -2,6 +2,8 @@
 
 SwarAI Studio never ships with a provider key. Pick **one** of the options below.
 
+> **Want it free?** Use the Google Colab notebook: **[FREE_COLAB.md](FREE_COLAB.md)**. No card, no PC needed.
+
 ## Option A: DeepInfra key in the app (fastest, about 5 minutes)
 
 1. On your phone, sign up at **deepinfra.com** and add a payment method. **Set a monthly spending limit** in billing.

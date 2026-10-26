@@ -184,18 +184,22 @@ fun SettingsScreen() {
             TestResult(test, DeepInfraDirectEngine.ID)
         }
 
-        SectionCard("Your computer (offline over Wi-Fi)", subtitle = "Run the official ACE-Step 1.5 API server on a PC with a GPU, on the same Wi-Fi. Start it with ACESTEP_API_HOST=0.0.0.0 uv run acestep-api") {
+        SectionCard(
+            "ACE-Step server (your PC or free Colab notebook)",
+            subtitle = "Free per song. Either run the free Google Colab notebook (see docs/FREE_COLAB.md) and paste its https address " +
+                "and password, or run ACE-Step on a PC with a GPU on your Wi-Fi (ACESTEP_API_HOST=0.0.0.0 uv run acestep-api).",
+        ) {
             var url by remember(settings.companionUrl) { mutableStateOf(settings.companionUrl) }
             var key by remember { mutableStateOf("") }
-            OutlinedTextField(url, { url = it }, label = { Text("Computer address, e.g. http://192.168.1.20:8001") }, singleLine = true,
+            OutlinedTextField(url, { url = it }, label = { Text("Address: https://….trycloudflare.com or http://192.168.1.20:8001") }, singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri), modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(key, { key = it }, label = { Text(if (hasCompanionKey) "API key (saved)" else "API key (optional, ACESTEP_API_KEY)") },
+            OutlinedTextField(key, { key = it }, label = { Text(if (hasCompanionKey) "Password (saved — type to replace)" else "Password / API key") },
                 singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { vm.saveCompanion(url, key); key = "" }) { Text("Save") }
                 OutlinedButton(onClick = { vm.test(AceStepCompanionEngine.ID) }) { Text("Test") }
             }
-            Notice("Plain http:// is allowed only for private network addresses (192.168.x.x, 10.x.x.x, 172.16–31.x.x, Tailscale 100.64–127.x.x, *.local).")
+            Notice("The Colab address changes every time you start the notebook; paste the new one here. Plain http:// is allowed only for private network addresses (192.168.x.x, 10.x.x.x, 172.16–31.x.x, Tailscale 100.64–127.x.x, *.local).")
             TestResult(test, AceStepCompanionEngine.ID)
         }
 

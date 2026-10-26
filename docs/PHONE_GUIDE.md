@@ -22,7 +22,8 @@ Each run also uploads `reports-…` (unit tests and lint) and `instrumented-repo
 
 | Option | What you need | Cost | Lyrics go to |
 |---|---|---|---|
-| **DeepInfra (your key)**: quickest | A DeepInfra account and API key | ≈ $0.001 per second of audio (≈ $0.18 per 3-minute song), billed by DeepInfra | DeepInfra (USA) |
+| **Free Colab notebook** ([FREE_COLAB.md](FREE_COLAB.md)) | A Google account | **Free** (limited daily GPU time) | Your Colab notebook (Google's servers) |
+| **DeepInfra (your key)**: quickest paid option | A DeepInfra account and API key | ≈ $0.001 per second of audio (≈ $0.18 per 3-minute song), billed by DeepInfra | DeepInfra (USA) |
 | **SwarAI server** (recommended for keeping keys off the phone) | Deploy `backend/` (see PROVIDER_SETUP.md) | Free hosting tier, plus provider fees | Your server, then the provider |
 | **Your computer** (offline over Wi-Fi) | A PC with an NVIDIA GPU running ACE-Step 1.5 | No per-song fee | Your own PC only |
 | On-device | Not possible today | n/a | n/a |

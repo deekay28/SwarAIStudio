@@ -7,6 +7,7 @@ make lyric videos, and export for YouTube.
 **Paste lyrics → Choose style → Choose voice → Generate → Listen → Save → Export**
 
 - 📱 **Install from your phone:** [docs/PHONE_GUIDE.md](docs/PHONE_GUIDE.md)
+- 🆓 **Free generation with Google Colab:** [docs/FREE_COLAB.md](docs/FREE_COLAB.md)
 - 🔑 **Set up a music engine:** [docs/PROVIDER_SETUP.md](docs/PROVIDER_SETUP.md) (DeepInfra key, your own server, or your PC)
 - 🧭 Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · Providers & licensing: [docs/PROVIDERS.md](docs/PROVIDERS.md)
 - 📴 Offline report: [docs/OFFLINE_REPORT.md](docs/OFFLINE_REPORT.md) · Privacy: [docs/PRIVACY.md](docs/PRIVACY.md)
@@ -19,7 +20,7 @@ make lyric videos, and export for YouTube.
 | Lyrics | Unicode/Devanagari editor, section tags (intro/verse/chorus/bridge/outro, also mukhda/antara), autosave, import/export .txt, original preserved, rhyme scheme, romanised pronunciation guide |
 | Style | 27 genres incl. Bhojpuri folk & devotional, Chhath Puja, Maithili, bhajan, ghazal, qawwali, Sufi, Hindi film, wedding, children's, pop/rock/rap/EDM/lo-fi, orchestral, meditation · moods · intensity · instruments · arrangement · BPM · key · duration · 1–4 candidates · advanced prompt · presets |
 | Voices | 15 original voice profiles (female, male, androgynous, youthful, duet, group) with real model-generated previews on request |
-| Engines | ACE-Step 1.5 XL on DeepInfra (own key) · SwarAI backend (keys server-side) · ACE-Step 1.5 on your PC over Wi-Fi · on-device shown as unavailable, with the reason |
+| Engines | Free Colab notebook (ACE-Step 1.5) · ACE-Step 1.5 XL on DeepInfra (own key) · SwarAI backend (keys server-side) · ACE-Step 1.5 on your PC over Wi-Fi · on-device shown as unavailable, with the reason |
 | Library | Offline playback, rename, favourites, search/filter, import audio, delete, export, project files |
 | Studio | Waveform, trim, fades, volume, normalise, save as new version, WAV and AAC/M4A export |
 | YouTube | Title/description/tags with AI disclosure, SRT/LRC (estimated timing), cover PNG (design generator or own image), 16:9 and 9:16 lyric videos with visualizer |
@@ -42,6 +43,7 @@ docs/      Guides and reports
 - DeepInfra ACE-Step 1.5 XL: about $0.001 per second of audio (≈ $0.18 per 3-minute song), charged to your DeepInfra account.
 - Backend hosting: fits free tiers (no GPU needed). The backend enforces a daily audio budget (default 30 minutes).
 - Your own PC: electricity only.
+- Google Colab notebook: free within Google's GPU limits.
 
 ## Licences
 

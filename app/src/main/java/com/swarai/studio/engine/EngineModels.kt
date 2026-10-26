@@ -21,6 +21,7 @@ data class GenerationSpec(
 enum class EngineKind(val label: String) {
     ON_DEVICE("On this phone"),
     COMPANION("Your computer (local network)"),
+    CLOUD_NOTEBOOK("Online via your own cloud notebook"),
     HOSTED_BACKEND("Online via your SwarAI server"),
     HOSTED_DIRECT("Online, direct with your own key"),
 }

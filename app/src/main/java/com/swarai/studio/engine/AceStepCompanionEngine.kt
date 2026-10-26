@@ -72,22 +72,38 @@ class AceStepCompanionEngine(
         if (apiKey.isNotBlank()) header("Authorization", "Bearer $apiKey")
     }
 
-    override suspend fun describe() = EngineInfo(
-        id = ID,
-        name = "ACE-Step 1.5 on your computer",
-        kind = EngineKind.COMPANION,
-        model = "ACE-Step 1.5 (model chosen on your computer)",
-        sendsDataTo = if (baseUrlRaw.isBlank()) "Your own computer" else "Your own computer at $baseUrlRaw",
-        available = baseUrlRaw.isNotBlank(),
-        unavailableReason = if (baseUrlRaw.isBlank()) "Set your computer's ACE-Step address in Settings." else null,
-        license = "ACE-Step 1.5: MIT.",
-        pricing = EnginePricing(0.0, "No per-song fee. Runs on your own GPU/CPU."),
-        capabilities = EngineCapabilities(
-            minDurationSec = 10, maxDurationSec = 600, maxVariations = 4,
-            formats = listOf("mp3", "wav", "flac"), cancel = "abandon_only",
-            languagesNote = "50+ languages incl. Hindi (Devanagari).",
-        ),
-    )
+    /** A public https address (e.g. the free Colab notebook's Cloudflare tunnel) means generation happens online. */
+    val isRemote: Boolean
+        get() = runCatching { java.net.URI(baseUrlRaw.trim()).host }.getOrNull()?.let { !NetworkPolicy.isLocalHost(it) } ?: false
+
+    override suspend fun describe(): EngineInfo {
+        val host = runCatching { java.net.URI(baseUrlRaw.trim()).host }.getOrNull() ?: baseUrlRaw
+        return EngineInfo(
+            id = ID,
+            name = if (isRemote) "ACE-Step 1.5 on your cloud notebook" else "ACE-Step 1.5 on your computer",
+            kind = if (isRemote) EngineKind.CLOUD_NOTEBOOK else EngineKind.COMPANION,
+            model = "ACE-Step 1.5 (model chosen on the server)",
+            sendsDataTo = when {
+                baseUrlRaw.isBlank() -> "Your own ACE-Step server"
+                isRemote && host.endsWith("trycloudflare.com") ->
+                    "Your Colab notebook (Google's servers) through a Cloudflare tunnel at $host"
+                isRemote -> "Your own ACE-Step server at $host (over the internet)"
+                else -> "Your own computer at $baseUrlRaw"
+            },
+            available = baseUrlRaw.isNotBlank(),
+            unavailableReason = if (baseUrlRaw.isBlank()) "Set your ACE-Step server address in Settings (your PC or the free Colab notebook)." else null,
+            license = "ACE-Step 1.5: MIT.",
+            pricing = EnginePricing(
+                0.0,
+                if (isRemote) "No per-song fee. Free Colab GPU time is limited by Google." else "No per-song fee. Runs on your own GPU/CPU.",
+            ),
+            capabilities = EngineCapabilities(
+                minDurationSec = 10, maxDurationSec = 600, maxVariations = 4,
+                formats = listOf("mp3", "wav", "flac"), cancel = "abandon_only",
+                languagesNote = "50+ languages incl. Hindi (Devanagari).",
+            ),
+        )
+    }
 
     override suspend fun testConnection(): String {
         val response = http.send(request("/health").get().build())
