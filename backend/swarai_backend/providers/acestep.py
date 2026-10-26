@@ -73,9 +73,15 @@ class SelfHostedAceStep(Provider):
     async def generate(
         self, request: GenerationRequest, seed: Optional[int], client: httpx.AsyncClient
     ) -> ProviderResult:
-        release = await client.post(
-            urljoin(self._base, "release_task"), json=self.build_payload(request, seed), headers=self._headers
-        )
+        payload = self.build_payload(request, seed)
+        # The server rejects thinking=true when its planner LM isn't loaded; only request it when available.
+        try:
+            health = await client.get(urljoin(self._base, "health"), headers=self._headers)
+            if health.is_success and (health.json().get("data") or {}).get("llm_initialized") is False:
+                payload["thinking"] = False
+        except (httpx.HTTPError, ValueError):
+            pass
+        release = await client.post(urljoin(self._base, "release_task"), json=payload, headers=self._headers)
         raise_for_provider_status(release, "ACE-Step server")
         task_id = (release.json().get("data") or {}).get("task_id")
         if not task_id:

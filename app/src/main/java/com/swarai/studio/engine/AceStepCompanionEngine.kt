@@ -51,6 +51,13 @@ data class AceResultItem(
 data class AceMetas(val duration: Double? = null, val bpm: Double? = null)
 
 @Serializable
+data class AceHealth(
+    @SerialName("llm_initialized") val llmInitialized: Boolean? = null,
+    @SerialName("loaded_model") val loadedModel: String? = null,
+    @SerialName("loaded_lm_model") val loadedLmModel: String? = null,
+)
+
+@Serializable
 private data class AceQueryRequest(@SerialName("task_id_list") val taskIdList: List<String>)
 
 /**
@@ -105,12 +112,23 @@ class AceStepCompanionEngine(
         )
     }
 
-    override suspend fun testConnection(): String {
+    private suspend fun health(): AceHealth {
         val response = http.send(request("/health").get().build())
         val code = response.code
         val body = response.bodyString()
         if (code !in 200..299) throw httpError("ACE-Step server", code, body)
-        return "Connected to ACE-Step server."
+        return runCatching { SwarJson.decodeFromString(AceEnvelope.serializer(AceHealth.serializer()), body).data }.getOrNull() ?: AceHealth()
+    }
+
+    override suspend fun testConnection(): String {
+        val h = health()
+        val model = h.loadedModel?.let { " Model: $it." } ?: ""
+        val lm = when (h.llmInitialized) {
+            true -> " Planner LM: ${h.loadedLmModel ?: "loaded"}."
+            false -> " Planner LM not loaded (songs still work)."
+            null -> ""
+        }
+        return "Connected to ACE-Step server.$model$lm"
     }
 
     override suspend fun generate(
@@ -123,6 +141,8 @@ class AceStepCompanionEngine(
         if (!info.available) throw EngineException(info.unavailableReason!!)
         val format = if (spec.format in info.capabilities.formats) spec.format else "mp3"
         val taskId = resumeToken ?: run {
+            // The server rejects thinking=true when its planner LM isn't loaded, so only ask for it when available.
+            val lmReady = runCatching { health().llmInitialized }.getOrNull() != false
             val body = AceReleaseRequest(
                 prompt = spec.caption,
                 lyrics = if (spec.instrumental) "[Instrumental]" else spec.lyrics,
@@ -130,6 +150,7 @@ class AceStepCompanionEngine(
                 audioDuration = info.clampDuration(spec.durationSec),
                 audioFormat = format,
                 batchSize = spec.variations.coerceIn(1, 4),
+                thinking = lmReady,
                 bpm = spec.bpm,
                 keyScale = spec.keyScale,
                 useRandomSeed = spec.seed == null,

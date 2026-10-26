@@ -20,6 +20,11 @@ concurrency:
 permissions:
   contents: read
 
+# Explicit bash => "-eo pipefail", so "cmd | tee log" fails when cmd fails.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build:
     name: Build, test and package debug APK

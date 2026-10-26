@@ -11,6 +11,11 @@ on:
 permissions:
   contents: read
 
+# Explicit bash => "-eo pipefail", so "cmd | tee log" fails when cmd fails.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   test:
     runs-on: ubuntu-latest

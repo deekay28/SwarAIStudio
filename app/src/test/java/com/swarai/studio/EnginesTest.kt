@@ -157,6 +157,25 @@ class EnginesTest {
         assertEquals(listOf("t1"), submitted)
     }
 
+    @Test fun aceStepSkipsThinkingWhenServerHasNoLm() = runBlocking {
+        var thinkingSent: String? = null
+        dispatch { r ->
+            when (r.path) {
+                "/health" -> json("""{"data":{"status":"ok","llm_initialized":false,"loaded_model":"acestep-v15-turbo"},"code":200}""")
+                "/release_task" -> {
+                    thinkingSent = Regex("\"thinking\":(true|false)").find(r.body.readUtf8())?.groupValues?.get(1)
+                    json("""{"data":{"task_id":"t2"},"code":200}""")
+                }
+                "/query_result" -> json("""{"data":[{"task_id":"t2","status":1,"result":${JsonPrimitive("""[{"file":"/v1/audio?path=x.mp3","status":1}]""")}}],"code":200}""")
+                else -> MockResponse().setBody(Buffer().write(fakeMp3))
+            }
+        }
+        val engine = AceStepCompanionEngine(server.url("/").toString(), "pw", http, pollIntervalMs = 1)
+        assertTrue(engine.testConnection().contains("not loaded"))
+        engine.generate(spec.copy(variations = 1), outDir, null, callbacks)
+        assertEquals("false", thinkingSent)
+    }
+
     @Test fun aceStepResultParsingVariants() {
         assertEquals(1, AceStepCompanionEngine.parseResults(JsonPrimitive("""{"file":"/a"}""")).size)
         assertEquals(0, AceStepCompanionEngine.parseResults(JsonPrimitive("garbage")).size)

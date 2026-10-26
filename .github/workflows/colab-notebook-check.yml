@@ -19,6 +19,11 @@ on:
 permissions:
   contents: read
 
+# Explicit bash => "-eo pipefail", so "cmd | tee log" fails when cmd fails.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   cpu-check:
     runs-on: ubuntu-latest
@@ -53,6 +58,9 @@ jobs:
         env:
           W: ${{ runner.temp }}/colab
         run: python colab/test_client.py "$(cat $W/swarai_public_url.txt)" "$(cat $W/swarai_password.txt)" out 10 2>&1 | tee client-log.txt
+      - name: Show server log on failure
+        if: failure()
+        run: tail -120 ${{ runner.temp }}/colab/acestep-server.log || true
       - name: Inspect audio
         if: always()
         run: |

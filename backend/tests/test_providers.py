@@ -133,3 +133,23 @@ def test_request_validation_normalises_text():
         req(key_scale="C; rm -rf")
     with pytest.raises(ValueError):
         req(duration_seconds=5)
+
+
+@pytest.mark.asyncio
+async def test_selfhosted_disables_thinking_without_lm():
+    sent = {}
+
+    def handler(request: httpx.Request):
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"data": {"llm_initialized": False}})
+        if request.url.path == "/release_task":
+            sent.update(json.loads(request.content))
+            return httpx.Response(200, json={"data": {"task_id": "t9"}})
+        if request.url.path == "/query_result":
+            return httpx.Response(200, json={"data": [{"task_id": "t9", "status": 1, "result": json.dumps([{"file": "/v1/audio?path=a"}])}]})
+        return httpx.Response(200, content=FAKE_MP3)
+
+    provider = SelfHostedAceStep("https://x.trycloudflare.com", "pw", poll_interval=0)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        await provider.generate(req(), None, client)
+    assert sent["thinking"] is False

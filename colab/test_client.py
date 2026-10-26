@@ -19,7 +19,9 @@ def call(path, body=None, raw=False):
     return data if raw else json.loads(data)
 
 
-print("health:", call("/health"))
+health = call("/health")
+print("health:", health)
+lm_ready = (health.get("data") or {}).get("llm_initialized") is not False
 payload = {  # identical field set to AceReleaseRequest in the app
     "prompt": "Bhojpuri devotional folk song, Chhath Puja, female vocal, warm, dholak, harmonium, shehnai",
     "lyrics": "[verse]\nउगते सूरज के लाली, छठी मईया के घाट\n[chorus]\nजय हो छठी मईया",
@@ -27,7 +29,7 @@ payload = {  # identical field set to AceReleaseRequest in the app
     "audio_duration": duration,
     "audio_format": "mp3",
     "batch_size": 1,
-    "thinking": True,
+    "thinking": lm_ready,  # the app does the same check
     "use_random_seed": True,
 }
 task = call("/release_task", payload)

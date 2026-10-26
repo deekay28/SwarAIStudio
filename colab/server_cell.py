@@ -73,6 +73,7 @@ if LM_MODEL == "none":
     env["ACESTEP_INIT_LLM"] = "false"
 else:
     env["ACESTEP_LM_MODEL_PATH"] = LM_MODEL
+    env["ACESTEP_INIT_LLM"] = "true"   # load the LM at startup; the app's "thinking" mode needs it
 if CPU_TEST:
     env["ACESTEP_DEVICE"] = "cpu"
 
@@ -92,6 +93,12 @@ while not http_ok(f"http://127.0.0.1:{PORT}/health", API_KEY):
     print(f"  …still loading ({int(time.time() - started)} s). Last log line: {tail(server_log, 1)[:150]}", flush=True)
     time.sleep(20)
 print(f"Server ready after {int(time.time() - started)} s.")
+try:
+    req = urllib.request.Request(f"http://127.0.0.1:{PORT}/health", headers={"Authorization": f"Bearer {API_KEY}"})
+    health = __import__("json").loads(urllib.request.urlopen(req, timeout=10).read())["data"]
+    print("Model:", health.get("loaded_model"), "| LM:", health.get("loaded_lm_model") or "not loaded (songs still work, without LM planning)")
+except Exception as exc:
+    print("Could not read server status:", exc)
 
 # 5. Public HTTPS address through Cloudflare
 step("5/5 Opening public HTTPS address")
