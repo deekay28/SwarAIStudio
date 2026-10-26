@@ -52,7 +52,7 @@ and paste the **new address** into Settings. The password stays the same within 
 |---|---|
 | "No backend with GPU available" / "You cannot currently connect to a GPU" | Free GPU limit reached. Tap **Cancel**, try later, or use the [Kaggle notebook](FREE_KAGGLE.md) |
 | App: "failed", "HTTP 530" or "can't connect" | The notebook stopped. Run ▶️ again and paste the new address |
-| Notebook says "out of memory" | Change the form option to `acestep-5Hz-lm-0.6B` (or `none`) and run again; generate shorter songs |
+| "ran out of memory (RAM)" / server stopped with no error | Free Colab has little RAM. The notebook retries by itself with a smaller song planner (1.7B → 0.6B → none); if it still fails, use the [Kaggle notebook](FREE_KAGGLE.md) |
 | Generation fails only for long songs | Keep songs ≤ 4 minutes on the free GPU |
 
 ## What the notebook does (for the curious)

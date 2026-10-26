@@ -34,6 +34,7 @@ jobs:
             notebook: colab/SwarAI_ACE-Step_Colab.ipynb
           - platform: kaggle
             notebook: kaggle/SwarAI_ACE-Step_Kaggle.ipynb
+            kill_first: "1"   # also proves the out-of-memory retry: first server is killed on purpose
     name: cpu-check (${{ matrix.platform }})
     runs-on: ubuntu-latest
     timeout-minutes: 150
@@ -54,6 +55,7 @@ jobs:
         env:
           SWARAI_CPU_TEST: "1"
           SWARAI_PLATFORM: ${{ matrix.platform }}
+          SWARAI_TEST_KILL_FIRST: ${{ matrix.kill_first || '0' }}
           # Same values a Colab kernel exports; the server must not inherit them.
           MPLBACKEND: module://matplotlib_inline.backend_inline
           PYTHONPATH: /env/python
