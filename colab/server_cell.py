@@ -47,6 +47,9 @@ else:
 step("2/5 Installing ACE-Step 1.5 (first time: ~5–10 min)")
 if not (REPO / "pyproject.toml").exists():
     sh(f"git clone --depth 1 https://github.com/ace-step/ACE-Step-1.5.git {REPO}")
+if not shutil.which("ffmpeg"):  # ACE-Step needs ffmpeg to write MP3 files (Colab normally has it)
+    sudo = "" if os.geteuid() == 0 else "sudo "
+    sh(f"{sudo}apt-get -qq update && {sudo}apt-get -qq install -y ffmpeg > /dev/null")
 if not shutil.which("uv"):
     sh(f"{sys.executable} -m pip install -q uv")
 sh(f"cd {REPO} && uv sync --quiet")

@@ -182,7 +182,9 @@ class AceStepCompanionEngine(
             delay(pollIntervalMs)
         }
         val results = parseResults(item.result).filter { it.file.isNotBlank() }
-        if (results.isEmpty()) throw EngineException("ACE-Step server returned no audio files.")
+        if (results.isEmpty()) throw EngineException(
+            "ACE-Step finished but saved no audio file. Check the server log (e.g. ffmpeg missing for MP3); try WAV or restart the notebook."
+        )
         return results.mapIndexed { index, result ->
             val path = if (result.file.startsWith("/")) result.file else "/${result.file}"
             val response = http.send(request(path).get().build())
