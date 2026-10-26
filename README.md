@@ -45,5 +45,5 @@ docs/      Guides and reports
 
 ## Licences
 
-App and backend code: see repository licence. ACE-Step 1.5: MIT. AI-generated music may coincidentally resemble
+App and backend code: no licence file has been chosen yet (all rights reserved by the owner until one is added). ACE-Step 1.5: MIT. AI-generated music may coincidentally resemble
 existing works; YouTube monetisation and copyright clearance are not guaranteed.

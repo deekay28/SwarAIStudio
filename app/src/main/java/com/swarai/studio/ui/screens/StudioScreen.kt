@@ -30,6 +30,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -68,7 +69,7 @@ import com.swarai.studio.video.CoverArt
 import com.swarai.studio.video.VideoOrientation
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun StudioScreen(navigator: Navigator, songId: Long?) {
     val vm = containerViewModel(key = "studio-$songId") { StudioViewModel(it, songId) }

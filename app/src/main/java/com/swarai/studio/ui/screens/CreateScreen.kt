@@ -31,6 +31,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -72,7 +73,7 @@ import com.swarai.studio.ui.components.formatDuration
 import com.swarai.studio.ui.components.formatUsd
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun CreateScreen(navigator: Navigator, projectId: Long?, initialVoiceId: String?, instrumental: Boolean) {
     val vm = containerViewModel(key = "create-$projectId-$initialVoiceId-$instrumental") {
@@ -383,7 +384,7 @@ fun CreateScreen(navigator: Navigator, projectId: Long?, initialVoiceId: String?
             title = { Text("Generate with ${e?.name}?") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Your title, lyrics and style text will be sent to ${e?.sendsDataTo}.")
+                    Text("Your lyrics and style text will be sent to ${e?.sendsDataTo}. The song title stays on this phone.")
                     if (e != null && !e.pricing.isFree) {
                         Text("Estimated cost: ${formatUsd(e.estimateUsd(spec))}. ${e.pricing.notes}", fontWeight = FontWeight.SemiBold)
                         Text("Charges are made by the provider to the account whose key is configured. Cancelling may not refund work already started.", style = MaterialTheme.typography.bodySmall)

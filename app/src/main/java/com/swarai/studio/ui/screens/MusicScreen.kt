@@ -30,6 +30,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -129,6 +130,7 @@ class MusicViewModel(val c: AppContainer) : ViewModel() {
 
 private enum class Filter(val label: String) { ALL("All"), FAVORITES("Favorites"), GENERATED("AI generated"), EDITED("Edited"), IMPORTED("Imported") }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MusicScreen(navigator: Navigator) {
     val vm = containerViewModel { MusicViewModel(it) }
