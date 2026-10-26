@@ -66,7 +66,11 @@ step("4/5 Starting ACE-Step server and downloading the model (first time: ~5–1
 key_file = WORK / "swarai_password.txt"
 API_KEY = key_file.read_text().strip() if key_file.exists() else secrets.token_urlsafe(18)
 key_file.write_text(API_KEY)
-env = dict(os.environ,
+# Colab's notebook settings must not leak into the server's own Python environment:
+# MPLBACKEND points at a notebook-only matplotlib module, and PYTHONPATH adds Colab's packages.
+base_env = {k: v for k, v in os.environ.items() if k not in ("MPLBACKEND", "PYTHONPATH")}
+env = dict(base_env,
+           MPLBACKEND="Agg",
            ACESTEP_API_HOST="127.0.0.1", ACESTEP_API_PORT=str(PORT), ACESTEP_API_KEY=API_KEY,
            ACESTEP_NO_INIT="false",                 # load models now, not on the first song
            ACESTEP_CONFIG_PATH="acestep-v15-turbo",  # 2B turbo: fits the free 15 GB T4

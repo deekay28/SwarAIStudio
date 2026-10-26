@@ -44,6 +44,9 @@ jobs:
       - name: Run the notebook's code cell (CPU test mode)
         env:
           SWARAI_CPU_TEST: "1"
+          # Same values a Colab kernel exports; the server must not inherit them.
+          MPLBACKEND: module://matplotlib_inline.backend_inline
+          PYTHONPATH: /env/python
           SWARAI_WORKDIR: ${{ runner.temp }}/colab
           SWARAI_LM_MODEL: ${{ inputs.lm_model || 'acestep-5Hz-lm-0.6B' }}
         run: |
