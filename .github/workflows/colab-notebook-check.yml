@@ -1,6 +1,6 @@
-name: Colab notebook check (CPU)
+name: Colab & Kaggle notebook check (CPU)
 
-# Runs the exact code cell of colab/SwarAI_ACE-Step_Colab.ipynb on a GitHub runner (CPU only, no GPU),
+# Runs the exact code cell of the Colab and Kaggle notebooks on a GitHub runner (CPU only, no GPU),
 # opens the real Cloudflare tunnel, and generates one short song through it with the same request the app sends.
 # Free; slow (CPU). Proves install + server + tunnel + app protocol work end to end.
 
@@ -14,7 +14,7 @@ on:
         default: acestep-5Hz-lm-0.6B
   push:
     branches: [main, "claude/**"]
-    paths: ["colab/**", ".github/workflows/colab-notebook-check.yml"]
+    paths: ["colab/**", "kaggle/**", ".github/workflows/colab-notebook-check.yml"]
 
 permissions:
   contents: read
@@ -26,6 +26,15 @@ defaults:
 
 jobs:
   cpu-check:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: colab
+            notebook: colab/SwarAI_ACE-Step_Colab.ipynb
+          - platform: kaggle
+            notebook: kaggle/SwarAI_ACE-Step_Kaggle.ipynb
+    name: cpu-check (${{ matrix.platform }})
     runs-on: ubuntu-latest
     timeout-minutes: 150
     steps:
@@ -37,23 +46,26 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Notebook is up to date with server_cell.py
+      - name: Notebooks are up to date with server_cell.py
         run: |
           python colab/build_notebook.py
-          git diff --exit-code colab/SwarAI_ACE-Step_Colab.ipynb
+          git diff --exit-code colab/SwarAI_ACE-Step_Colab.ipynb kaggle/SwarAI_ACE-Step_Kaggle.ipynb
       - name: Run the notebook's code cell (CPU test mode)
         env:
           SWARAI_CPU_TEST: "1"
+          SWARAI_PLATFORM: ${{ matrix.platform }}
           # Same values a Colab kernel exports; the server must not inherit them.
           MPLBACKEND: module://matplotlib_inline.backend_inline
           PYTHONPATH: /env/python
           SWARAI_WORKDIR: ${{ runner.temp }}/colab
           SWARAI_LM_MODEL: ${{ inputs.lm_model || 'acestep-5Hz-lm-0.6B' }}
+          NOTEBOOK: ${{ matrix.notebook }}
         run: |
           mkdir -p "$SWARAI_WORKDIR"
           python - <<'PY'
           import json
-          nb = json.load(open("colab/SwarAI_ACE-Step_Colab.ipynb"))
+          import os
+          nb = json.load(open(os.environ["NOTEBOOK"]))
           code = "".join(c["source"] if isinstance(c["source"], str) else "".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "code")
           exec(compile(code, "notebook-cell", "exec"))
           PY
@@ -76,7 +88,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: colab-cpu-check
+          name: notebook-cpu-check-${{ matrix.platform }}
           path: |
             out/
             client-log.txt

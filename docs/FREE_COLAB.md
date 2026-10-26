@@ -50,7 +50,7 @@ and paste the **new address** into Settings. The password stays the same within 
 ## If something goes wrong
 | Problem | Fix |
 |---|---|
-| "You cannot currently connect to a GPU" | Free GPU quota used up. Try later, or use DeepInfra/your PC |
+| "No backend with GPU available" / "You cannot currently connect to a GPU" | Free GPU limit reached. Tap **Cancel**, try later, or use the [Kaggle notebook](FREE_KAGGLE.md) |
 | App: "failed", "HTTP 530" or "can't connect" | The notebook stopped. Run ▶️ again and paste the new address |
 | Notebook says "out of memory" | Change the form option to `acestep-5Hz-lm-0.6B` (or `none`) and run again; generate shorter songs |
 | Generation fails only for long songs | Keep songs ≤ 4 minutes on the free GPU |
@@ -59,4 +59,4 @@ and paste the **new address** into Settings. The password stays the same within 
 It clones the official ACE-Step 1.5 repository, installs it with `uv`, starts the official `acestep-api` server
 (turbo 2B model, PyTorch LM backend, FlashAttention off for the T4) with a random password, and opens a
 Cloudflare quick tunnel to it. The code is in [`colab/server_cell.py`](../colab/server_cell.py), and the
-**Colab notebook check** workflow runs that same code on a GitHub runner to test it.
+**Colab & Kaggle notebook check** workflow runs that same code on a GitHub runner to test it.
