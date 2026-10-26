@@ -185,8 +185,8 @@ fun SettingsScreen() {
         }
 
         SectionCard(
-            "ACE-Step server (your PC or free Colab notebook)",
-            subtitle = "Free per song. Either run the free Google Colab notebook (see docs/FREE_COLAB.md) and paste its https address " +
+            "ACE-Step server (your PC or free Colab/Kaggle notebook)",
+            subtitle = "Free per song. Either run the free Google Colab or Kaggle notebook (docs/FREE_COLAB.md, docs/FREE_KAGGLE.md) and paste its https address " +
                 "and password, or run ACE-Step on a PC with a GPU on your Wi-Fi (ACESTEP_API_HOST=0.0.0.0 uv run acestep-api).",
         ) {
             var url by remember(settings.companionUrl) { mutableStateOf(settings.companionUrl) }
@@ -199,7 +199,7 @@ fun SettingsScreen() {
                 Button(onClick = { vm.saveCompanion(url, key); key = "" }) { Text("Save") }
                 OutlinedButton(onClick = { vm.test(AceStepCompanionEngine.ID) }) { Text("Test") }
             }
-            Notice("The Colab address changes every time you start the notebook; paste the new one here. Plain http:// is allowed only for private network addresses (192.168.x.x, 10.x.x.x, 172.16–31.x.x, Tailscale 100.64–127.x.x, *.local).")
+            Notice("The Colab/Kaggle address changes every time you start the notebook; paste the new one here. Plain http:// is allowed only for private network addresses (192.168.x.x, 10.x.x.x, 172.16–31.x.x, Tailscale 100.64–127.x.x, *.local).")
             TestResult(test, AceStepCompanionEngine.ID)
         }
 

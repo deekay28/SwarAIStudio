@@ -2,7 +2,7 @@
 
 SwarAI Studio never ships with a provider key. Pick **one** of the options below.
 
-> **Want it free?** Use the Google Colab notebook: **[FREE_COLAB.md](FREE_COLAB.md)**. No card, no PC needed.
+> **Want it free?** Use the Google Colab notebook (**[FREE_COLAB.md](FREE_COLAB.md)**) or, when Colab has no GPU free, the Kaggle notebook (**[FREE_KAGGLE.md](FREE_KAGGLE.md)**). No card, no PC needed.
 
 ## Option A: DeepInfra key in the app (fastest, about 5 minutes)
 

@@ -3,13 +3,26 @@
 #@markdown (installing + downloading the model). When it finishes you'll see an **address** and a **password**.
 LM_MODEL = "acestep-5Hz-lm-1.7B"  #@param ["acestep-5Hz-lm-1.7B", "acestep-5Hz-lm-0.6B", "none"]
 
+# This same cell powers both the Google Colab and the Kaggle notebook.
 import os, pathlib, re, secrets, shutil, subprocess, sys, time, urllib.request
 
 CPU_TEST = os.environ.get("SWARAI_CPU_TEST") == "1"        # used only by this repo's CI check
 LM_MODEL = os.environ.get("SWARAI_LM_MODEL", LM_MODEL)
-WORK = pathlib.Path(os.environ.get("SWARAI_WORKDIR", "/content"))
+PLATFORM = os.environ.get("SWARAI_PLATFORM") or (
+    "kaggle" if os.environ.get("KAGGLE_KERNEL_RUN_TYPE") or os.path.isdir("/kaggle/working") else "colab")
+if PLATFORM == "kaggle":
+    # /kaggle/working is limited to ~20 GB and is saved with the notebook; the model and Python env need more.
+    default_work = "/kaggle/temp" if os.path.isdir("/kaggle/temp") else "/tmp/swarai"
+    GPU_HELP = ("In the notebook's right-hand panel (⋮ → Settings on a phone) set "
+                "Accelerator → GPU T4 x2, and turn Internet on, then run again.")
+else:
+    default_work = "/content"
+    GPU_HELP = "In the menu choose Runtime → Change runtime type → T4 GPU → Save, then run again."
+WORK = pathlib.Path(os.environ.get("SWARAI_WORKDIR", default_work))
+WORK.mkdir(parents=True, exist_ok=True)
 REPO = WORK / "ACE-Step-1.5"
 PORT = 8001
+print("Platform:", PLATFORM, "| working folder:", WORK)
 
 def sh(cmd):
     print("$", cmd, flush=True)
@@ -34,17 +47,33 @@ def tail(path, n=30):
 
 # 1. GPU
 step("1/5 Checking GPU")
-gpu = subprocess.run("nvidia-smi --query-gpu=name,memory.total --format=csv,noheader",
+gpu = subprocess.run("nvidia-smi --query-gpu=name,memory.total,compute_cap --format=csv,noheader",
                      shell=True, capture_output=True, text=True)
-if gpu.returncode == 0:
+if gpu.returncode != 0 and shutil.which("nvidia-smi"):  # older drivers lack the compute_cap field
+    gpu = subprocess.run("nvidia-smi --query-gpu=name,memory.total --format=csv,noheader",
+                         shell=True, capture_output=True, text=True)
+if gpu.returncode == 0 and gpu.stdout.strip():
+    first = gpu.stdout.strip().splitlines()[0]
     print("GPU:", gpu.stdout.strip())
+    try:
+        compute_cap = float(first.split(",")[-1]) if first.count(",") >= 2 else (0.0 if "P100" in first else 7.5)
+    except ValueError:
+        compute_cap = 0.0 if "P100" in first else 7.5
+    if compute_cap < 7.0:
+        raise SystemExit(f"❌ This GPU ({first.split(',')[0]}) is too old for ACE-Step's PyTorch build. "
+                         + ("Choose Accelerator → GPU T4 x2 (not P100) and run again." if PLATFORM == "kaggle" else GPU_HELP))
 elif CPU_TEST:
     print("No GPU (CI CPU test mode).")
 else:
-    raise SystemExit("❌ No GPU found. In the menu choose Runtime → Change runtime type → T4 GPU → Save, then run again.")
+    raise SystemExit("❌ No GPU found. " + GPU_HELP)
 
 # 2. Install ACE-Step (official repo) with uv
 step("2/5 Installing ACE-Step 1.5 (first time: ~5–10 min)")
+try:
+    urllib.request.urlopen("https://github.com", timeout=15)
+except Exception:
+    raise SystemExit("❌ No internet access. " + ("Turn Internet on in the notebook settings (needs a phone-verified "
+                     "Kaggle account), then run again." if PLATFORM == "kaggle" else "Check your connection and run again."))
 if not (REPO / "pyproject.toml").exists():
     sh(f"git clone --depth 1 https://github.com/ace-step/ACE-Step-1.5.git {REPO}")
 if not shutil.which("ffmpeg"):  # ACE-Step needs ffmpeg to write MP3 files (Colab normally has it)
@@ -71,6 +100,7 @@ key_file.write_text(API_KEY)
 base_env = {k: v for k, v in os.environ.items() if k not in ("MPLBACKEND", "PYTHONPATH")}
 env = dict(base_env,
            MPLBACKEND="Agg",
+           CUDA_VISIBLE_DEVICES=os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0],  # Kaggle T4 x2: use one
            ACESTEP_API_HOST="127.0.0.1", ACESTEP_API_PORT=str(PORT), ACESTEP_API_KEY=API_KEY,
            ACESTEP_NO_INIT="false",                 # load models now, not on the first song
            ACESTEP_CONFIG_PATH="acestep-v15-turbo",  # 2B turbo: fits the free 15 GB T4
@@ -130,7 +160,7 @@ for _ in range(45):  # new tunnel names take a few seconds to resolve
 
 print("\n" + "=" * 60)
 print("✅ READY — paste these into SwarAI Studio")
-print("   Settings → ACE-Step server (your PC or free Colab notebook)")
+print("   Settings → ACE-Step server (your PC or free Colab/Kaggle notebook)")
 print(f"\n   Address : {PUBLIC_URL}")
 print(f"   Password: {API_KEY}")
 print("\n   Then tap Save → Test, and select this engine.")

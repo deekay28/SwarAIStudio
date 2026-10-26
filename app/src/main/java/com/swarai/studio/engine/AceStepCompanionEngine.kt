@@ -93,16 +93,16 @@ class AceStepCompanionEngine(
             sendsDataTo = when {
                 baseUrlRaw.isBlank() -> "Your own ACE-Step server"
                 isRemote && host.endsWith("trycloudflare.com") ->
-                    "Your Colab notebook (Google's servers) through a Cloudflare tunnel at $host"
+                    "Your Colab/Kaggle notebook (Google's servers) through a Cloudflare tunnel at $host"
                 isRemote -> "Your own ACE-Step server at $host (over the internet)"
                 else -> "Your own computer at $baseUrlRaw"
             },
             available = baseUrlRaw.isNotBlank(),
-            unavailableReason = if (baseUrlRaw.isBlank()) "Set your ACE-Step server address in Settings (your PC or the free Colab notebook)." else null,
+            unavailableReason = if (baseUrlRaw.isBlank()) "Set your ACE-Step server address in Settings (your PC or the free Colab/Kaggle notebook)." else null,
             license = "ACE-Step 1.5: MIT.",
             pricing = EnginePricing(
                 0.0,
-                if (isRemote) "No per-song fee. Free Colab GPU time is limited by Google." else "No per-song fee. Runs on your own GPU/CPU.",
+                if (isRemote) "No per-song fee. Free Colab/Kaggle GPU time is limited." else "No per-song fee. Runs on your own GPU/CPU.",
             ),
             capabilities = EngineCapabilities(
                 minDurationSec = 10, maxDurationSec = 600, maxVariations = 4,
