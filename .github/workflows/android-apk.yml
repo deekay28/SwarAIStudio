@@ -36,8 +36,11 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Use the runner's preinstalled Android SDK
+        run: |
+          SDKM=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)
+          echo "ANDROID_HOME=$ANDROID_HOME, sdkmanager=$SDKM"
+          yes | "$SDKM" --licenses > /dev/null || true
 
       - name: Set up Gradle (validates wrapper, caches safely)
         uses: gradle/actions/setup-gradle@v4
