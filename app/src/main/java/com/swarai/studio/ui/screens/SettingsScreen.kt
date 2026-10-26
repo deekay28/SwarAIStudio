@@ -182,7 +182,7 @@ fun SettingsScreen() {
             TestResult(test, DeepInfraDirectEngine.ID)
         }
 
-        SectionCard("Your computer (offline over Wi-Fi)", subtitle = "Run the official ACE-Step 1.5 API server on a PC with a GPU, on the same Wi-Fi. Start it with: uv run acestep-api --host 0.0.0.0") {
+        SectionCard("Your computer (offline over Wi-Fi)", subtitle = "Run the official ACE-Step 1.5 API server on a PC with a GPU, on the same Wi-Fi. Start it with ACESTEP_API_HOST=0.0.0.0 uv run acestep-api") {
             var url by remember(settings.companionUrl) { mutableStateOf(settings.companionUrl) }
             var key by remember { mutableStateOf("") }
             OutlinedTextField(url, { url = it }, label = { Text("Computer address, e.g. http://192.168.1.20:8001") }, singleLine = true,
