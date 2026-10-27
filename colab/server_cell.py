@@ -1,7 +1,8 @@
 #@title ▶️ Start the free ACE-Step 1.5 server for SwarAI Studio
 #@markdown Tap the ▶️ button (or **Runtime → Run all**). First start takes about 10–20 minutes
 #@markdown (installing + downloading the model). When it finishes you'll see an **address** and a **password**.
-LM_MODEL = "acestep-5Hz-lm-1.7B"  #@param ["acestep-5Hz-lm-1.7B", "acestep-5Hz-lm-0.6B", "none"]
+LM_MODEL = "auto"  #@param ["auto", "acestep-5Hz-lm-1.7B", "acestep-5Hz-lm-0.6B", "none"]
+#@markdown `auto` picks the song-planner model that fits this machine's memory (0.6B on free Colab, 1.7B on Kaggle).
 
 # This same cell powers both the Google Colab and the Kaggle notebook.
 import os, pathlib, re, secrets, shutil, subprocess, sys, time, urllib.request
@@ -106,29 +107,62 @@ env = dict(base_env,
            ACESTEP_CONFIG_PATH="acestep-v15-turbo",  # 2B turbo: fits the free 15 GB T4
            ACESTEP_USE_FLASH_ATTENTION="false",      # T4 (Turing) has no FlashAttention
            ACESTEP_LM_BACKEND="pt")                  # PyTorch LM backend works on T4
-if LM_MODEL == "none":
-    env["ACESTEP_INIT_LLM"] = "false"
-else:
-    env["ACESTEP_LM_MODEL_PATH"] = LM_MODEL
-    env["ACESTEP_INIT_LLM"] = "true"   # load the LM at startup; the app's "thinking" mode needs it
 if CPU_TEST:
     env["ACESTEP_DEVICE"] = "cpu"
 
+# The song-planner LM must fit in the machine's normal memory (RAM) next to the music model.
+# Free Colab has ~12.7 GB RAM: the 1.7B planner gets the server killed there, so "auto" uses 0.6B.
+ram_gb = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 1024**3
+LM_CHAIN = ["acestep-5Hz-lm-1.7B", "acestep-5Hz-lm-0.6B", "none"]
+if LM_MODEL == "auto":
+    LM_MODEL = LM_CHAIN[0] if ram_gb >= 24 else LM_CHAIN[1]
+candidates = LM_CHAIN[LM_CHAIN.index(LM_MODEL):] if LM_MODEL in LM_CHAIN else [LM_MODEL, "none"]
+print(f"Machine RAM: {ram_gb:.1f} GB → song planner: {LM_MODEL}")
+
 server_log = WORK / "acestep-server.log"
-for proc_name in ("acestep-api", "cloudflared"):
-    subprocess.run(f"pkill -f {proc_name}", shell=True)   # re-running the cell restarts cleanly
-server = subprocess.Popen(f"cd {REPO} && exec uv run acestep-api", shell=True, env=env,
-                          stdout=open(server_log, "w"), stderr=subprocess.STDOUT)
-started = time.time()
-while not http_ok(f"http://127.0.0.1:{PORT}/health", API_KEY):
-    if server.poll() is not None:
-        print(tail(server_log, 60))
-        raise SystemExit("❌ ACE-Step server stopped. The log above shows why.")
-    if time.time() - started > 60 * 60:
-        print(tail(server_log, 60))
-        raise SystemExit("❌ Server did not start within 60 minutes.")
-    print(f"  …still loading ({int(time.time() - started)} s). Last log line: {tail(server_log, 1)[:150]}", flush=True)
-    time.sleep(20)
+server = None
+for attempt, lm in enumerate(candidates):
+    run_env = dict(env)
+    if lm == "none":
+        run_env["ACESTEP_INIT_LLM"] = "false"
+    else:
+        run_env["ACESTEP_LM_MODEL_PATH"] = lm
+        run_env["ACESTEP_INIT_LLM"] = "true"   # load at startup; the app's "thinking" mode needs it
+    for proc_name in ("acestep-api", "cloudflared"):
+        subprocess.run(f"pkill -f {proc_name}", shell=True)   # re-running the cell restarts cleanly
+    time.sleep(2)
+    print(f"Starting server (song planner: {lm})…", flush=True)
+    server = subprocess.Popen(f"cd {REPO} && exec uv run acestep-api", shell=True, env=run_env,
+                              stdout=open(server_log, "w"), stderr=subprocess.STDOUT)
+    started = time.time()
+    simulate_kill = os.environ.get("SWARAI_TEST_KILL_FIRST") == "1" and attempt == 0   # CI test of the retry path
+    ready = False
+    while True:
+        if http_ok(f"http://127.0.0.1:{PORT}/health", API_KEY):
+            ready = True
+            break
+        if simulate_kill and time.time() - started > 30:
+            print("(CI test: simulating the server being killed for lack of memory)")
+            subprocess.run("pkill -9 -f acestep-api", shell=True)
+            simulate_kill = False
+        if server.poll() is not None:
+            break
+        if time.time() - started > 60 * 60:
+            print(tail(server_log, 60))
+            raise SystemExit("❌ Server did not start within 60 minutes.")
+        print(f"  …still loading ({int(time.time() - started)} s). Last log line: {tail(server_log, 1)[:150]}", flush=True)
+        time.sleep(20)
+    if ready:
+        break
+    log_text = tail(server_log, 60)
+    killed = server.returncode in (-9, 137) or "Traceback" not in log_text
+    print(log_text)
+    reason = ("it was killed without an error message, which almost always means the machine ran out of memory (RAM)"
+              if killed else "of the error above")
+    if attempt + 1 < len(candidates):
+        print(f"\n⚠️ The server stopped because {reason}. Retrying with a smaller song planner: {candidates[attempt + 1]}\n", flush=True)
+        continue
+    raise SystemExit(f"❌ ACE-Step server stopped because {reason}. Try again later or use the other notebook (Colab/Kaggle).")
 print(f"Server ready after {int(time.time() - started)} s.")
 try:
     req = urllib.request.Request(f"http://127.0.0.1:{PORT}/health", headers={"Authorization": f"Bearer {API_KEY}"})
@@ -152,10 +186,14 @@ for _ in range(90):
 if not PUBLIC_URL:
     print(tail(tunnel_log))
     raise SystemExit("❌ Could not open a Cloudflare tunnel. Run the cell again.")
-for _ in range(45):  # new tunnel names take a few seconds to resolve
-    if http_ok(f"{PUBLIC_URL}/health", API_KEY):
+ok_in_a_row = 0
+for _ in range(60):  # a new tunnel takes a little while before every request gets through reliably
+    ok_in_a_row = ok_in_a_row + 1 if http_ok(f"{PUBLIC_URL}/health", API_KEY) else 0
+    if ok_in_a_row >= 3:
         break
-    time.sleep(4)
+    time.sleep(3)
+if ok_in_a_row < 3:
+    print("⚠️ The public address is answering unreliably; the app retries automatically, but if songs fail, run the cell again.")
 (WORK / "swarai_public_url.txt").write_text(PUBLIC_URL)
 
 print("\n" + "=" * 60)

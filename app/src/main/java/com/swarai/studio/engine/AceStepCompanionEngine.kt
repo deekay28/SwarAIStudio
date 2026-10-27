@@ -1,6 +1,7 @@
 package com.swarai.studio.engine
 
 import java.io.File
+import java.io.IOException
 import kotlinx.coroutines.delay
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -168,12 +169,28 @@ class AceStepCompanionEngine(
             task.taskId
         }
         var item = AceQueryItem(taskId, 0)
+        var transientFailures = 0
         while (true) {
             val query = SwarJson.encodeToString(AceQueryRequest.serializer(), AceQueryRequest(listOf(taskId)))
-            val response = http.send(request("/query_result").post(query.toRequestBody(JSON)).build())
-            val code = response.code
-            val text = response.bodyString()
+            // Tunnels (Colab/Kaggle) and Wi-Fi can drop a request now and then; don't fail a song for one hiccup.
+            val polled = runCatching {
+                val response = http.send(request("/query_result").post(query.toRequestBody(JSON)).build())
+                response.code to response.bodyString()
+            }
+            val failure = polled.exceptionOrNull()
+            if (failure != null && failure !is IOException) throw failure
+            val (code, text) = polled.getOrNull() ?: (-1 to "")
+            if (failure != null || isTransient(code)) {
+                if (++transientFailures > MAX_TRANSIENT_FAILURES) {
+                    throw failure?.let { EngineException("Lost connection to the ACE-Step server: ${it.message}", it) }
+                        ?: httpError("ACE-Step server", code, text)
+                }
+                callbacks.onProgress("Connection hiccup, retrying… ($transientFailures)")
+                delay(pollIntervalMs * transientFailures.coerceAtMost(5))
+                continue
+            }
             if (code !in 200..299) throw httpError("ACE-Step server", code, text)
+            transientFailures = 0
             val items = SwarJson.decodeFromString(AceEnvelope.serializer(ListSerializer(AceQueryItem.serializer())), text).data.orEmpty()
             item = items.firstOrNull { it.taskId == taskId } ?: AceQueryItem(taskId, 0)
             if (item.status == 1) break
@@ -187,10 +204,19 @@ class AceStepCompanionEngine(
         )
         return results.mapIndexed { index, result ->
             val path = if (result.file.startsWith("/")) result.file else "/${result.file}"
-            val response = http.send(request(path).get().build())
-            if (!response.isSuccessful) throw httpError("ACE-Step server", response.code).also { response.close() }
             val file = File(outputDir, "acestep-$taskId-$index.$format")
-            response.saveTo(file)
+            var attempt = 0
+            while (true) {
+                val outcome = runCatching {
+                    val response = http.send(request(path).get().build())
+                    if (!response.isSuccessful) throw httpError("ACE-Step server", response.code).also { response.close() }
+                    response.saveTo(file)
+                }
+                val error = outcome.exceptionOrNull() ?: break
+                val retryable = error is IOException || (error is EngineException && error.message?.contains("HTTP 5") == true)
+                if (!retryable || ++attempt >= 4) throw error
+                delay(pollIntervalMs * attempt)
+            }
             val actual = sniffAudioFormat(ByteArray(16).also { head -> file.inputStream().use { it.read(head) } }) ?: format
             val finalFile = if (actual != format) File(outputDir, "acestep-$taskId-$index.$actual").also { file.renameTo(it) } else file
             GeneratedAudio(
@@ -204,6 +230,10 @@ class AceStepCompanionEngine(
     companion object {
         const val ID = "companion"
         private val JSON = "application/json".toMediaType()
+        private const val MAX_TRANSIENT_FAILURES = 10
+
+        /** Gateway/tunnel errors (502–504, Cloudflare 52x/530) and timeouts are worth retrying. */
+        fun isTransient(code: Int) = code == 408 || code == 429 || code in 500..599
 
         /** The API returns `result` as a JSON string containing a list (or a single object). */
         fun parseResults(element: JsonElement?): List<AceResultItem> {

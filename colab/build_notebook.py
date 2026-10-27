@@ -32,7 +32,7 @@ colab_trouble = """### Troubleshooting
 - **"No backend with GPU available"** / **"You cannot currently connect to a GPU"**: the free GPU limit is reached. Tap **Cancel** (CPU is far too slow), try again later, or use the Kaggle notebook.
 - **"No GPU found"**: Runtime → Change runtime type → **T4 GPU** → Save → run again.
 - **App says it can't connect**: the notebook was stopped or restarted; run the cell again and paste the *new* address.
-- **Out of memory**: choose `acestep-5Hz-lm-0.6B` (or `none`) in the cell's form and run again, or ask for shorter songs.
+- **"ran out of memory (RAM)"**: the notebook automatically retries with a smaller song planner (1.7B → 0.6B → none). If it still fails, generate shorter songs or use the Kaggle notebook (more RAM).
 - Logs: `/content/acestep-server.log` and `/content/cloudflared.log` (folder icon on the left).
 """
 
@@ -62,7 +62,7 @@ kaggle_trouble = """### Troubleshooting
 - **"No GPU found"** or **"GPU is too old"**: Settings → Accelerator → **GPU T4 x2** → run again.
 - **"No internet access"**: Settings → **Internet On** (requires phone verification), then run again.
 - **App says it can't connect**: the session stopped; run the cell again and paste the *new* address.
-- **Out of memory**: set `LM_MODEL = "acestep-5Hz-lm-0.6B"` (or `"none"`) at the top of the cell and run again.
+- **"ran out of memory (RAM)"**: the notebook automatically retries with a smaller song planner (1.7B → 0.6B → none). You can also set `LM_MODEL = "acestep-5Hz-lm-0.6B"` at the top of the cell.
 - Logs: `/kaggle/temp/acestep-server.log` and `/kaggle/temp/cloudflared.log` (or `/tmp/swarai/…`).
 """
 

@@ -153,3 +153,25 @@ async def test_selfhosted_disables_thinking_without_lm():
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         await provider.generate(req(), None, client)
     assert sent["thinking"] is False
+
+
+@pytest.mark.asyncio
+async def test_selfhosted_retries_tunnel_hiccup():
+    polls = {"n": 0}
+
+    def handler(request: httpx.Request):
+        if request.url.path == "/release_task":
+            return httpx.Response(200, json={"data": {"task_id": "t5"}})
+        if request.url.path == "/query_result":
+            polls["n"] += 1
+            if polls["n"] <= 2:
+                return httpx.Response(530)
+            return httpx.Response(200, json={"data": [{"task_id": "t5", "status": 1, "result": json.dumps([{"file": "/v1/audio?path=a"}])}]})
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"data": {"llm_initialized": True}})
+        return httpx.Response(200, content=FAKE_MP3)
+
+    provider = SelfHostedAceStep("https://x.trycloudflare.com", "pw", poll_interval=0)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await provider.generate(req(), None, client)
+    assert polls["n"] == 3 and result.audio == FAKE_MP3

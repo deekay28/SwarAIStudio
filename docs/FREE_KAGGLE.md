@@ -49,7 +49,7 @@ In the notebook's right-hand panel (**Session options** / **Settings**; on a nar
 | "No GPU found" / "GPU is too old" | Accelerator → **GPU T4 x2**, then run again |
 | "No internet access" | Internet → **On** (needs phone verification), then run again |
 | App can't connect / HTTP 530 | The session stopped. Run the cell again and paste the new address |
-| Out of memory | Change `LM_MODEL` at the top of the cell to `"acestep-5Hz-lm-0.6B"` or `"none"` |
+| "ran out of memory (RAM)" | The notebook retries by itself with a smaller song planner (1.7B → 0.6B → none) |
 
 Both notebooks (Colab and Kaggle) are generated from the same code, [`colab/server_cell.py`](../colab/server_cell.py),
 and the **Colab & Kaggle notebook check** workflow tests both.
