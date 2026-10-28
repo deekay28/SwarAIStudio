@@ -217,6 +217,9 @@ class EnginesTest {
         assertTrue(message, message.contains("torch.OutOfMemoryError: CUDA out of memory"))
         assertTrue(message, message.contains("shorter song"))
         assertEquals("ACE-Step server reported that generation failed.", AceStepCompanionEngine.failureMessage(AceQueryItem("t", 2)))
+        val nan = SwarJson.encodeToString(ListSerializer(AceResultItem.serializer()),
+            listOf(AceResultItem(status = 2, error = "RuntimeError: Generation produced NaN or Inf latents (dtype=torch.float16)")))
+        assertTrue(AceStepCompanionEngine.failureMessage(AceQueryItem("t", 2, JsonPrimitive(nan))).contains("float32"))
     }
 
     @Test fun aceStepResultParsingVariants() {

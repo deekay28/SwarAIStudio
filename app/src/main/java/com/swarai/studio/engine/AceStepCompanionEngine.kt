@@ -257,6 +257,8 @@ class AceStepCompanionEngine(
                 "bfloat16" in lower || "bf16" in lower ->
                     " This GPU doesn't fully support bfloat16; run the latest notebook version."
                 "ffmpeg" in lower -> " The server couldn't save MP3; run the latest notebook version (it installs ffmpeg)."
+                "nan or inf" in lower ->
+                    " This happens on older GPUs (like Colab's T4) in float16. Run the latest notebook version, which switches them to float32."
                 else -> ""
             }
             return if (cause.isEmpty()) "ACE-Step server reported that generation failed.$hint"

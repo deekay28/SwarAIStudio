@@ -54,6 +54,7 @@ jobs:
       - name: Run the notebook's code cell (CPU test mode)
         env:
           SWARAI_CPU_TEST: "1"
+          SWARAI_REQUIRE_PATCH: "1"   # fail if the T4 float32 fix stops applying to ACE-Step
           SWARAI_PLATFORM: ${{ matrix.platform }}
           SWARAI_TEST_KILL_FIRST: ${{ matrix.kill_first || '0' }}
           # Same values a Colab kernel exports; the server must not inherit them.
