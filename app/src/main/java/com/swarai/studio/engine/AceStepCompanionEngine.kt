@@ -37,7 +37,12 @@ data class AceEnvelope<T>(val data: T? = null, val code: Int = 200, val error: S
 data class AceTask(@SerialName("task_id") val taskId: String)
 
 @Serializable
-data class AceQueryItem(@SerialName("task_id") val taskId: String, val status: Int, val result: JsonElement? = null)
+data class AceQueryItem(
+    @SerialName("task_id") val taskId: String,
+    val status: Int,
+    val result: JsonElement? = null,
+    @SerialName("progress_text") val progressText: String? = null,
+)
 
 @Serializable
 data class AceResultItem(
@@ -46,6 +51,7 @@ data class AceResultItem(
     val lyrics: String? = null,
     @SerialName("seed_value") val seedValue: String? = null,
     val metas: AceMetas? = null,
+    val error: String? = null,
 )
 
 @Serializable
@@ -194,7 +200,7 @@ class AceStepCompanionEngine(
             val items = SwarJson.decodeFromString(AceEnvelope.serializer(ListSerializer(AceQueryItem.serializer())), text).data.orEmpty()
             item = items.firstOrNull { it.taskId == taskId } ?: AceQueryItem(taskId, 0)
             if (item.status == 1) break
-            if (item.status == 2) throw EngineException("ACE-Step server reported that generation failed.")
+            if (item.status == 2) throw EngineException(failureMessage(item))
             callbacks.onProgress("Rendering on your computer…")
             delay(pollIntervalMs)
         }
@@ -234,6 +240,30 @@ class AceStepCompanionEngine(
 
         /** Gateway/tunnel errors (502–504, Cloudflare 52x/530) and timeouts are worth retrying. */
         fun isTransient(code: Int) = code == 408 || code == 429 || code in 500..599
+
+        private val errorLine = Regex("^[\\w.]*(Error|Exception)\\b.*")
+
+        /** Turns ACE-Step's failure details (often a full Python traceback) into a short, useful message. */
+        fun failureMessage(item: AceQueryItem): String {
+            val raw = parseResults(item.result).firstNotNullOfOrNull { it.error?.takeIf { e -> e.isNotBlank() } }
+                ?: item.progressText.orEmpty()
+            val lines = raw.lines().map { it.trim() }.filter { it.isNotEmpty() }
+            // The last "SomethingError: ..." line of a traceback is the actual cause.
+            val cause = lines.lastOrNull { errorLine.matches(it) } ?: lines.lastOrNull().orEmpty()
+            val lower = raw.lowercase()
+            val hint = when {
+                "out of memory" in lower || "outofmemory" in lower ->
+                    " The notebook's GPU ran out of memory: try a shorter song (e.g. 1–2 minutes) or 1 candidate."
+                "bfloat16" in lower || "bf16" in lower ->
+                    " This GPU doesn't fully support bfloat16; run the latest notebook version."
+                "ffmpeg" in lower -> " The server couldn't save MP3; run the latest notebook version (it installs ffmpeg)."
+                "nan or inf" in lower ->
+                    " This happens on older GPUs (like Colab's T4) in float16. Run the latest notebook version, which switches them to float32."
+                else -> ""
+            }
+            return if (cause.isEmpty()) "ACE-Step server reported that generation failed.$hint"
+            else "ACE-Step generation failed: ${cause.take(300)}$hint"
+        }
 
         /** The API returns `result` as a JSON string containing a list (or a single object). */
         fun parseResults(element: JsonElement?): List<AceResultItem> {

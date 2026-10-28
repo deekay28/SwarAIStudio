@@ -1,11 +1,15 @@
 package com.swarai.studio
 
+import com.swarai.studio.engine.AceQueryItem
+import com.swarai.studio.engine.AceResultItem
 import com.swarai.studio.engine.AceStepCompanionEngine
 import com.swarai.studio.engine.BackendEngine
 import com.swarai.studio.engine.DeepInfraDirectEngine
 import com.swarai.studio.engine.EngineException
 import com.swarai.studio.engine.GenerationCallbacks
 import com.swarai.studio.engine.GenerationSpec
+import com.swarai.studio.engine.SwarJson
+import kotlinx.serialization.builtins.ListSerializer
 import java.io.File
 import java.nio.file.Files
 import java.util.Base64
@@ -204,6 +208,18 @@ class EnginesTest {
         val engine = AceStepCompanionEngine(server.url("/").toString(), "", http, pollIntervalMs = 1)
         val error = assertThrows(EngineException::class.java) { runBlocking { engine.generate(spec, outDir, null, callbacks) } }
         assertTrue(error.message!!.contains("530"))
+    }
+
+    @Test fun aceStepFailureShowsServerReason() {
+        val traceback = "Traceback (most recent call last):\n  File \"x.py\", line 1\ntorch.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.00 GiB"
+        val result = SwarJson.encodeToString(ListSerializer(AceResultItem.serializer()), listOf(AceResultItem(status = 2, error = traceback)))
+        val message = AceStepCompanionEngine.failureMessage(AceQueryItem("t", 2, JsonPrimitive(result)))
+        assertTrue(message, message.contains("torch.OutOfMemoryError: CUDA out of memory"))
+        assertTrue(message, message.contains("shorter song"))
+        assertEquals("ACE-Step server reported that generation failed.", AceStepCompanionEngine.failureMessage(AceQueryItem("t", 2)))
+        val nan = SwarJson.encodeToString(ListSerializer(AceResultItem.serializer()),
+            listOf(AceResultItem(status = 2, error = "RuntimeError: Generation produced NaN or Inf latents (dtype=torch.float16)")))
+        assertTrue(AceStepCompanionEngine.failureMessage(AceQueryItem("t", 2, JsonPrimitive(nan))).contains("float32"))
     }
 
     @Test fun aceStepResultParsingVariants() {

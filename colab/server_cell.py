@@ -48,6 +48,7 @@ def tail(path, n=30):
 
 # 1. GPU
 step("1/5 Checking GPU")
+compute_cap = None
 gpu = subprocess.run("nvidia-smi --query-gpu=name,memory.total,compute_cap --format=csv,noheader",
                      shell=True, capture_output=True, text=True)
 if gpu.returncode != 0 and shutil.which("nvidia-smi"):  # older drivers lack the compute_cap field
@@ -68,6 +69,39 @@ elif CPU_TEST:
 else:
     raise SystemExit("❌ No GPU found. " + GPU_HELP)
 
+def patch_acestep_fp32(repo: pathlib.Path) -> bool:
+    """Make ACESTEP_DTYPE=float32 work on pre-Ampere NVIDIA GPUs (ACE-Step suggests it but never reads it).
+    Returns True when both files are patched (or already were)."""
+    marker = "# SwarAI notebook patch"
+    orch = repo / "acestep/core/generation/handler/init_service_orchestrator.py"
+    loader = repo / "acestep/core/generation/handler/init_service_loader.py"
+    ok = True
+    s = orch.read_text()
+    if marker not in s:
+        old = '            elif resolved_device == "cuda":\n                if gpu_config.cuda_supports_bfloat16():'
+        new = ('            elif resolved_device == "cuda" and os.environ.get("ACESTEP_DTYPE", "").strip().lower() in ("float32", "fp32"):  ' + marker + '\n'
+               '                self.dtype = torch.float32\n'
+               '                logger.info("[initialize_service] ACESTEP_DTYPE=float32: running the music model in float32.")\n'
+               + old)
+        if old in s:
+            orch.write_text(s.replace(old, new, 1))
+        else:
+            ok = False
+    s = loader.read_text()
+    if marker not in s:
+        old_attn = 'elif device == "cuda" and not gpu_config.cuda_supports_bfloat16():'
+        new_attn = 'elif device == "cuda" and not gpu_config.cuda_supports_bfloat16() and self.dtype != torch.float32:  ' + marker
+        # Load float16 weights (half the RAM) and let the existing .to(device).to(self.dtype) upcast on the GPU.
+        old_load = '                    dtype=self.dtype,\n                )'
+        new_load = ('                    dtype=(torch.float16 if (self.dtype == torch.float32 and device == "cuda") else self.dtype),  ' + marker + '\n'
+                    '                )')
+        if old_attn in s and old_load in s and "import torch" in s:
+            loader.write_text(s.replace(old_attn, new_attn, 1).replace(old_load, new_load, 1))
+        else:
+            ok = False
+    return ok
+
+
 # 2. Install ACE-Step (official repo) with uv
 step("2/5 Installing ACE-Step 1.5 (first time: ~5–10 min)")
 try:
@@ -83,6 +117,12 @@ if not shutil.which("ffmpeg"):  # ACE-Step needs ffmpeg to write MP3 files (Cola
 if not shutil.which("uv"):
     sh(f"{sys.executable} -m pip install -q uv")
 sh(f"cd {REPO} && uv sync --quiet")
+# Older GPUs (T4 = compute 7.5) only get float16 in ACE-Step, which overflows into NaN ("Generation produced NaN or
+# Inf latents"). ACE-Step's own hint says to use ACESTEP_DTYPE=float32 but never reads it, so we patch that in.
+FP32_PATCHED = patch_acestep_fp32(REPO)
+print("float32 fix for older GPUs:", "applied" if FP32_PATCHED else "NOT applied (ACE-Step code changed)")
+if os.environ.get("SWARAI_REQUIRE_PATCH") == "1" and not FP32_PATCHED:
+    raise SystemExit("❌ float32 patch no longer applies to ACE-Step (CI check)")
 
 # 3. Cloudflare quick tunnel binary (free, no account)
 step("3/5 Getting Cloudflare tunnel")
@@ -109,6 +149,9 @@ env = dict(base_env,
            ACESTEP_LM_BACKEND="pt")                  # PyTorch LM backend works on T4
 if CPU_TEST:
     env["ACESTEP_DEVICE"] = "cpu"
+if compute_cap is not None and compute_cap < 8.0 and FP32_PATCHED:
+    env["ACESTEP_DTYPE"] = "float32"   # avoids float16 NaN on T4; slower but correct
+    print("Older GPU detected: the music model will run in float32 (prevents broken/NaN songs).")
 
 # The song-planner LM must fit in the machine's normal memory (RAM) next to the music model.
 # Free Colab has ~12.7 GB RAM: the 1.7B planner gets the server killed there, so "auto" uses 0.6B.
@@ -208,13 +251,24 @@ print("Keep this tab open while you make songs. The address changes every time y
 if CPU_TEST or os.environ.get("SWARAI_NO_WAIT") == "1":
     print("(test mode: not waiting)")
 else:
+    seen = server_log.stat().st_size if server_log.exists() else 0
     try:
         while True:
-            time.sleep(60)
+            time.sleep(15)
+            # Show new server errors right here, so failures are visible without opening the log file.
+            if server_log.exists() and server_log.stat().st_size > seen:
+                with open(server_log, errors="replace") as f:
+                    f.seek(seen)
+                    new = f.read()
+                seen = server_log.stat().st_size
+                for line in new.splitlines():
+                    if re.search(r"\| ERROR|Traceback|Error:|Exception:|out of memory", line):
+                        print("⚠️ server:", line.strip()[:400], flush=True)
             if server.poll() is not None:
                 print(tail(server_log, 40)); raise SystemExit("❌ ACE-Step server stopped (log above). Run the cell again.")
             if tunnel.poll() is not None:
                 raise SystemExit("❌ Tunnel closed. Run the cell again (you'll get a new address).")
-            print(time.strftime("%H:%M"), "server running —", PUBLIC_URL, flush=True)
+            if int(time.time()) % 300 < 15:
+                print(time.strftime("%H:%M"), "server running —", PUBLIC_URL, flush=True)
     except KeyboardInterrupt:
         server.terminate(); tunnel.terminate(); print("Stopped.")

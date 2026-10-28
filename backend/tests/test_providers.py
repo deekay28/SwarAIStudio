@@ -4,7 +4,7 @@ import json
 import httpx
 import pytest
 
-from swarai_backend.providers.acestep import SelfHostedAceStep, parse_result_field
+from swarai_backend.providers.acestep import SelfHostedAceStep, failure_message, parse_result_field
 from swarai_backend.providers.base import ProviderError, decode_audio_field, sniff_format
 from swarai_backend.providers.deepinfra import DeepInfraAceStep
 from swarai_backend.providers.diagnostic import tone_wav
@@ -175,3 +175,9 @@ async def test_selfhosted_retries_tunnel_hiccup():
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         result = await provider.generate(req(), None, client)
     assert polls["n"] == 3 and result.audio == FAKE_MP3
+
+
+def test_failure_message_extracts_cause():
+    tb = "Traceback (most recent call last):\n  File \"x\"\ntorch.OutOfMemoryError: CUDA out of memory."
+    msg = failure_message({"status": 2, "result": json.dumps([{"status": 2, "error": tb}])})
+    assert "torch.OutOfMemoryError: CUDA out of memory." in msg and "shorter song" in msg
