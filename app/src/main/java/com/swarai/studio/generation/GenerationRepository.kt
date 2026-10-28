@@ -42,10 +42,11 @@ class GenerationRepository(private val context: Context, private val db: AppData
     }
 
     suspend fun cancel(jobId: Long) {
-        WorkManager.getInstance(context).cancelUniqueWork(workName(jobId))
+        // Mark first: the worker treats a stop as "cancelled" only when the user asked for it (see GenerationWorker).
         db.jobs().get(jobId)?.takeIf { it.status == "QUEUED" || it.status == "RUNNING" }?.let {
             db.jobs().update(it.copy(status = "CANCELLED", finishedAt = System.currentTimeMillis(), progress = "Cancelled"))
         }
+        WorkManager.getInstance(context).cancelUniqueWork(workName(jobId))
     }
 
     companion object {

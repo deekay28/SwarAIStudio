@@ -1,8 +1,14 @@
 package com.swarai.studio.generation
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.ServiceInfo
+import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
+import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
+import com.swarai.studio.R
 import com.swarai.studio.SwarApp
 import com.swarai.studio.audio.AudioCodec
 import com.swarai.studio.data.db.GenerationJobEntity
@@ -17,8 +23,10 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
 /**
- * Runs one generation job. Never retries automatically: a retry could bill the user twice. If the process dies
- * mid-job, resumable engines continue polling the existing remote job; others are marked as interrupted.
+ * Runs one generation job as a foreground job (with a notification), so Android doesn't stop it after
+ * 10 minutes or put it to sleep. It is never re-submitted automatically (that could bill twice): if Android
+ * stops it anyway (network change, battery saving, process death), resumable engines pick up the same remote
+ * job when WorkManager runs it again; others are marked as interrupted. Only the user's Cancel marks it cancelled.
  */
 class GenerationWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
@@ -34,8 +42,10 @@ class GenerationWorker(context: Context, params: WorkerParameters) : CoroutineWo
             return Result.failure()
         }
         val spec = SwarJson.decodeFromString(GenerationSpec.serializer(), job.specJson)
-        job = job.copy(status = "RUNNING", progress = "Submitting…")
+        val resuming = job.remoteJobId != null
+        job = job.copy(status = "RUNNING", progress = if (resuming) "Resuming…" else "Submitting…")
         jobs.update(job)
+        showProgress(job.engineName, job.progress)
         val outputDir = container.songsDir
         return try {
             val info = engine.describe()
@@ -46,6 +56,7 @@ class GenerationWorker(context: Context, params: WorkerParameters) : CoroutineWo
                 }
 
                 override suspend fun onProgress(message: String) {
+                    if (message != job.progress) showProgress(job.engineName, message)
                     job = job.copy(progress = message)
                     jobs.update(job)
                 }
@@ -77,7 +88,18 @@ class GenerationWorker(context: Context, params: WorkerParameters) : CoroutineWo
             jobs.update(job.copy(status = "SUCCEEDED", progress = "${results.size} song(s) ready", finishedAt = now()))
             Result.success()
         } catch (e: CancellationException) {
-            withContext(NonCancellable) { markEnded(job, "CANCELLED", "Cancelled") }
+            withContext(NonCancellable) {
+                val latest = jobs.get(job.id) ?: job
+                when {
+                    latest.status == "CANCELLED" -> Unit // the user tapped Cancel
+                    latest.remoteJobId == null ->
+                        jobs.update(latest.copy(status = "QUEUED", progress = "Paused by Android, will start again automatically…"))
+                    engine.resumable ->
+                        jobs.update(latest.copy(progress = "Paused by Android (network change or battery saving), will continue automatically…"))
+                    else -> markEnded(latest, "FAILED",
+                        "Android stopped the app while this song was generating. It was not resubmitted to avoid a second charge.")
+                }
+            }
             throw e
         } catch (e: EngineException) {
             markEnded(job, "FAILED", e.message)
@@ -94,6 +116,31 @@ class GenerationWorker(context: Context, params: WorkerParameters) : CoroutineWo
         }
     }
 
+    /** Shows/updates the foreground notification. Failing to (e.g. started from the background) must not fail the job. */
+    private suspend fun showProgress(engineName: String, message: String) {
+        runCatching { setForeground(foregroundInfo(engineName, message)) }
+    }
+
+    private fun foregroundInfo(engineName: String, message: String): ForegroundInfo {
+        val manager = applicationContext.getSystemService(NotificationManager::class.java)
+        if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+            manager.createNotificationChannel(
+                NotificationChannel(CHANNEL_ID, "Song generation", NotificationManager.IMPORTANCE_LOW).apply {
+                    description = "Shown while a song is being generated"
+                }
+            )
+        }
+        val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("Generating song · $engineName")
+            .setContentText(message)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setProgress(0, 0, true)
+            .build()
+        return ForegroundInfo(NOTIFICATION_BASE_ID + (id.hashCode() and 0x3FF), notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+    }
+
     private suspend fun markEnded(job: GenerationJobEntity, status: String, message: String?) {
         val jobs = (applicationContext as SwarApp).container.db.jobs()
         val latest = jobs.get(job.id) ?: job
@@ -104,6 +151,8 @@ class GenerationWorker(context: Context, params: WorkerParameters) : CoroutineWo
 
     companion object {
         const val KEY_JOB_ID = "job_id"
+        private const val CHANNEL_ID = "generation"
+        private const val NOTIFICATION_BASE_ID = 4100
         val TERMINAL = setOf("SUCCEEDED", "FAILED", "CANCELLED")
     }
 }
