@@ -208,13 +208,24 @@ print("Keep this tab open while you make songs. The address changes every time y
 if CPU_TEST or os.environ.get("SWARAI_NO_WAIT") == "1":
     print("(test mode: not waiting)")
 else:
+    seen = server_log.stat().st_size if server_log.exists() else 0
     try:
         while True:
-            time.sleep(60)
+            time.sleep(15)
+            # Show new server errors right here, so failures are visible without opening the log file.
+            if server_log.exists() and server_log.stat().st_size > seen:
+                with open(server_log, errors="replace") as f:
+                    f.seek(seen)
+                    new = f.read()
+                seen = server_log.stat().st_size
+                for line in new.splitlines():
+                    if re.search(r"\| ERROR|Traceback|Error:|Exception:|out of memory", line):
+                        print("⚠️ server:", line.strip()[:400], flush=True)
             if server.poll() is not None:
                 print(tail(server_log, 40)); raise SystemExit("❌ ACE-Step server stopped (log above). Run the cell again.")
             if tunnel.poll() is not None:
                 raise SystemExit("❌ Tunnel closed. Run the cell again (you'll get a new address).")
-            print(time.strftime("%H:%M"), "server running —", PUBLIC_URL, flush=True)
+            if int(time.time()) % 300 < 15:
+                print(time.strftime("%H:%M"), "server running —", PUBLIC_URL, flush=True)
     except KeyboardInterrupt:
         server.terminate(); tunnel.terminate(); print("Stopped.")

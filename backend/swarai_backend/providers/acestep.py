@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from typing import Optional
 from urllib.parse import urljoin
 
@@ -113,7 +114,7 @@ class SelfHostedAceStep(Provider):
             if item and item.get("status") == 1:
                 break
             if item and item.get("status") == 2:
-                raise ProviderError("ACE-Step server reported that generation failed.")
+                raise ProviderError(failure_message(item))
             await asyncio.sleep(self._poll_interval)
         results = parse_result_field(item.get("result"))
         if not results or not results[0].get("file"):
@@ -132,6 +133,16 @@ class SelfHostedAceStep(Provider):
             duration_seconds=metas.get("duration"),
             lyrics_used=first.get("lyrics"),
         )
+
+
+def failure_message(item: dict) -> str:
+    """Short reason from ACE-Step's failure details (usually a Python traceback)."""
+    raw = next((r.get("error") for r in parse_result_field(item.get("result")) if r.get("error")), None) \
+        or item.get("progress_text") or ""
+    lines = [line.strip() for line in str(raw).splitlines() if line.strip()]
+    cause = next((line for line in reversed(lines) if re.match(r"^[\w.]*(Error|Exception)\b", line)), lines[-1] if lines else "")
+    hint = " The GPU ran out of memory: try a shorter song." if "out of memory" in str(raw).lower() else ""
+    return (f"ACE-Step generation failed: {cause[:300]}" if cause else "ACE-Step server reported that generation failed.") + hint
 
 
 def parse_result_field(result: object) -> list[dict]:
